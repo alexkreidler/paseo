@@ -521,6 +521,62 @@ function sendOpenProjectEvent(win: BrowserWindow, projectPath: string): void {
 // App lifecycle
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Deep link (paseo:// URL scheme)
+// ---------------------------------------------------------------------------
+
+const DEEP_LINK_SCHEME = "paseo";
+
+if (!app.isPackaged) {
+  app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [
+    path.resolve(process.argv[1]),
+  ]);
+} else {
+  app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+}
+
+function handleDeepLinkUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    log.warn("[deep-link] failed to parse URL:", url);
+    return;
+  }
+
+  if (parsed.protocol !== `${DEEP_LINK_SCHEME}:`) return;
+
+  // The deep link path maps 1:1 to an Expo Router path.
+  // e.g. paseo:///h/srv_xxx/agent/abc → /h/srv_xxx/agent/abc
+  const routePath = parsed.pathname || "/";
+  const query = parsed.search || "";
+  const hash = parsed.hash || "";
+
+  log.info("[deep-link] navigating to:", routePath);
+
+  const win = BrowserWindow.getAllWindows()[0];
+  if (!win) {
+    log.warn("[deep-link] no window available");
+    return;
+  }
+
+  win.show();
+  if (win.isMinimized()) win.restore();
+  win.focus();
+
+  if (app.isPackaged) {
+    void win.loadURL(`${APP_SCHEME}://app${routePath}${query}${hash}`);
+  } else {
+    void win.loadURL(`${DEV_SERVER_URL}${routePath}${query}${hash}`);
+  }
+}
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  log.info("[deep-link] open-url event:", url);
+  handleDeepLinkUrl(url);
+});
+
 function setupSingleInstanceLock(): boolean {
   const gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
@@ -530,6 +586,14 @@ function setupSingleInstanceLock(): boolean {
 
   app.on("second-instance", (_event, commandLine) => {
     log.info("[open-project] second-instance commandLine:", commandLine);
+
+    // Check for deep link URL in command line args (Windows/Linux)
+    const deepLinkArg = commandLine.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
+    if (deepLinkArg) {
+      handleDeepLinkUrl(deepLinkArg);
+      return;
+    }
+
     const openProjectPath = parseOpenProjectPathFromArgv({
       argv: commandLine,
       isDefaultApp: false,

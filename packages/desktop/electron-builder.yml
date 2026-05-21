@@ -20,6 +20,10 @@ publish:
   provider: github
   owner: getpaseo
   repo: paseo
+protocols:
+  - name: Paseo
+    schemes:
+      - paseo
 mac:
   artifactName: "Paseo-${version}-${arch}.${ext}"
   category: public.app-category.developer-tools
