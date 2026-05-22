@@ -1576,6 +1576,32 @@ export class HostRuntimeStore {
     await this.persistHosts();
   }
 
+  async setHostSsh(
+    serverId: string,
+    input: { sshHost: string | null; sshUser: string | null },
+  ): Promise<void> {
+    const sshHost = input.sshHost?.trim() ?? "";
+    const sshUser = input.sshUser?.trim() ?? "";
+    const now = new Date().toISOString();
+    const next = this.hosts.map((h) => {
+      if (h.serverId !== serverId) return h;
+      const updated: HostProfile = { ...h, updatedAt: now };
+      if (sshHost.length > 0) {
+        updated.sshHost = sshHost;
+      } else {
+        delete updated.sshHost;
+      }
+      if (sshUser.length > 0) {
+        updated.sshUser = sshUser;
+      } else {
+        delete updated.sshUser;
+      }
+      return updated;
+    });
+    this.setHostsAndSync(next);
+    await this.persistHosts();
+  }
+
   async removeHost(serverId: string): Promise<void> {
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     this.setHostsAndSync(remaining);
@@ -2085,6 +2111,10 @@ export interface HostMutations {
     label?: string,
   ) => Promise<HostProfile>;
   renameHost: (serverId: string, label: string) => Promise<void>;
+  setHostSsh: (
+    serverId: string,
+    input: { sshHost: string | null; sshUser: string | null },
+  ) => Promise<void>;
   removeHost: (serverId: string) => Promise<void>;
   removeConnection: (serverId: string, connectionId: string) => Promise<void>;
 }
@@ -2099,6 +2129,7 @@ export function useHostMutations(): HostMutations {
       upsertConnectionFromOffer: (offer, label) => store.upsertConnectionFromOffer(offer, label),
       upsertConnectionFromOfferUrl: (url, label) => store.upsertConnectionFromOfferUrl(url, label),
       renameHost: (serverId, label) => store.renameHost(serverId, label),
+      setHostSsh: (serverId, input) => store.setHostSsh(serverId, input),
       removeHost: (serverId) => store.removeHost(serverId),
       removeConnection: (serverId, connectionId) => store.removeConnection(serverId, connectionId),
     }),

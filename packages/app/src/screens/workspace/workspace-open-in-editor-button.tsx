@@ -21,7 +21,8 @@ import {
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
+import { buildRemoteSshUrl } from "./remote-ssh-url";
 import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { buildGitHubBranchTreeUrl } from "@/git/github-url";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -86,6 +87,8 @@ export function WorkspaceOpenInEditorButton({
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const isLocalDaemon = useIsLocalDaemon(serverId);
+  const hosts = useHosts();
+  const host = hosts.find((entry) => entry.serverId === serverId) ?? null;
   const { preferredEditorId, updatePreferredEditor } = usePreferredEditor();
 
   const shouldQueryWorkspace =
@@ -140,6 +143,37 @@ export function WorkspaceOpenInEditorButton({
     [availableEditors, client, cwd],
   );
 
+  const remoteSshTargets = useMemo<OpenTarget[]>(() => {
+    if (isLocalDaemon) return [];
+    const sshHost = host?.sshHost?.trim();
+    if (!sshHost) return [];
+    const sshUser = host?.sshUser?.trim();
+    const editors: { id: string; label: string; iconId: "vscode" | "cursor" }[] = [
+      { id: "vscode-remote-ssh", label: "VS Code (Remote)", iconId: "vscode" },
+      { id: "cursor-remote-ssh", label: "Cursor (Remote)", iconId: "cursor" },
+    ];
+    const targets: OpenTarget[] = [];
+    for (const editor of editors) {
+      const url = buildRemoteSshUrl({
+        editor: editor.iconId,
+        sshHost,
+        sshUser,
+        path: cwd,
+      });
+      if (!url) continue;
+      targets.push({
+        id: editor.id,
+        label: editor.label,
+        icon: (
+          <ThemedEditorAppIcon editorId={editor.iconId} size={16} uniProps={mutedColorMapping} />
+        ),
+        requiresLocalDaemon: false,
+        onOpen: () => openExternalUrl(url),
+      });
+    }
+    return targets;
+  }, [cwd, host?.sshHost, host?.sshUser, isLocalDaemon]);
+
   const githubTarget = useMemo<OpenTarget | null>(() => {
     if (!checkoutStatus?.isGit) {
       return null;
@@ -160,16 +194,11 @@ export function WorkspaceOpenInEditorButton({
     };
   }, [checkoutStatus]);
 
-  const targets = useMemo(
-    () =>
-      filterTargetsForDaemonLocation(
-        githubTarget ? [...editorTargets, githubTarget] : editorTargets,
-        {
-          isLocalDaemon,
-        },
-      ),
-    [editorTargets, githubTarget, isLocalDaemon],
-  );
+  const targets = useMemo(() => {
+    const combined: OpenTarget[] = [...editorTargets, ...remoteSshTargets];
+    if (githubTarget) combined.push(githubTarget);
+    return filterTargetsForDaemonLocation(combined, { isLocalDaemon });
+  }, [editorTargets, remoteSshTargets, githubTarget, isLocalDaemon]);
 
   const targetIds = useMemo(() => targets.map((target) => target.id), [targets]);
   const effectivePreferredEditorId = useMemo(

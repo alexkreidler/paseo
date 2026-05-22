@@ -166,6 +166,8 @@ export function HostPage({ serverId, onHostRemoved }: HostPageProps) {
 
       <ConnectionsSection host={host} />
 
+      {!isLocalDaemon ? <RemoteSshSection host={host} /> : null}
+
       <DaemonSection host={host} isLocalDaemon={isLocalDaemon} />
 
       <ProvidersSection serverId={serverId} />
@@ -374,6 +376,91 @@ function ConnectionRow({
         Remove
       </Button>
     </View>
+  );
+}
+
+function RemoteSshSection({ host }: { host: HostProfile }) {
+  const { theme } = useUnistyles();
+  const { setHostSsh } = useHostMutations();
+  const [draftHost, setDraftHost] = useState(host.sshHost ?? "");
+  const [draftUser, setDraftUser] = useState(host.sshUser ?? "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setDraftHost(host.sshHost ?? "");
+    setDraftUser(host.sshUser ?? "");
+  }, [host.serverId, host.sshHost, host.sshUser]);
+
+  const trimmedHost = draftHost.trim();
+  const trimmedUser = draftUser.trim();
+  const persistedHost = host.sshHost ?? "";
+  const persistedUser = host.sshUser ?? "";
+  const isDirty = trimmedHost !== persistedHost || trimmedUser !== persistedUser;
+
+  const handleSave = useCallback(() => {
+    if (isSaving || !isDirty) return;
+    setIsSaving(true);
+    void setHostSsh(host.serverId, {
+      sshHost: trimmedHost.length > 0 ? trimmedHost : null,
+      sshUser: trimmedUser.length > 0 ? trimmedUser : null,
+    })
+      .catch((error) => {
+        console.error("[HostPage] Failed to save SSH host", error);
+        Alert.alert("Error", "Unable to save SSH host");
+      })
+      .finally(() => setIsSaving(false));
+  }, [host.serverId, isDirty, isSaving, setHostSsh, trimmedHost, trimmedUser]);
+
+  return (
+    <SettingsSection title="Remote SSH">
+      <View style={settingsStyles.card} testID="host-page-remote-ssh-card">
+        <View style={remoteSshStyles.body}>
+          <Text style={remoteSshStyles.hint}>
+            Configure an SSH host to enable opening this workspace in VS Code or Cursor via Remote
+            SSH. The host should match an entry in your local ~/.ssh/config or be a reachable
+            hostname/IP.
+          </Text>
+          <View style={remoteSshStyles.field}>
+            <Text style={remoteSshStyles.label}>SSH host</Text>
+            <TextInput
+              value={draftHost}
+              onChangeText={setDraftHost}
+              placeholder="my-devbox"
+              placeholderTextColor={theme.colors.foregroundMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isSaving}
+              style={remoteSshStyles.input}
+              testID="host-page-ssh-host-input"
+            />
+          </View>
+          <View style={remoteSshStyles.field}>
+            <Text style={remoteSshStyles.label}>SSH user (optional)</Text>
+            <TextInput
+              value={draftUser}
+              onChangeText={setDraftUser}
+              placeholder="dev"
+              placeholderTextColor={theme.colors.foregroundMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isSaving}
+              style={remoteSshStyles.input}
+              testID="host-page-ssh-user-input"
+            />
+          </View>
+          <View style={remoteSshStyles.actions}>
+            <Button
+              size="sm"
+              onPress={handleSave}
+              disabled={!isDirty || isSaving}
+              testID="host-page-ssh-save"
+            >
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+          </View>
+        </View>
+      </View>
+    </SettingsSection>
   );
 }
 
@@ -875,6 +962,38 @@ const styles = StyleSheet.create((theme) => ({
   emptyText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
+  },
+}));
+
+const remoteSshStyles = StyleSheet.create((theme) => ({
+  body: {
+    padding: theme.spacing[3],
+    gap: theme.spacing[3],
+  },
+  hint: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  field: {
+    gap: theme.spacing[1],
+  },
+  label: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  input: {
+    backgroundColor: theme.colors.surface0,
+    color: theme.colors.foreground,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    fontSize: theme.fontSize.sm,
+  },
+  actions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
 }));
 

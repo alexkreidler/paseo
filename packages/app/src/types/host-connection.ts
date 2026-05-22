@@ -40,6 +40,8 @@ export interface HostProfile {
   lifecycle: HostLifecycle;
   connections: HostConnection[];
   preferredConnectionId: string | null;
+  sshHost?: string;
+  sshUser?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -324,12 +326,23 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
       ? record.preferredConnectionId
       : (connections[0]?.id ?? null);
 
+  const sshHost =
+    typeof record.sshHost === "string" && record.sshHost.trim().length > 0
+      ? record.sshHost.trim()
+      : undefined;
+  const sshUser =
+    typeof record.sshUser === "string" && record.sshUser.trim().length > 0
+      ? record.sshUser.trim()
+      : undefined;
+
   return {
     serverId,
     label,
     lifecycle: defaultLifecycle(),
     connections,
     preferredConnectionId,
+    ...(sshHost ? { sshHost } : {}),
+    ...(sshUser ? { sshUser } : {}),
     createdAt: typeof record.createdAt === "string" ? record.createdAt : now,
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : now,
   };
