@@ -1790,6 +1790,8 @@ export class Session {
     switch (msg.type) {
       case "agent.rewind.request":
         return this.handleAgentRewindRequest(msg);
+      case "agent.fork.request":
+        return this.handleAgentForkRequest(msg);
       default:
         return undefined;
     }
@@ -3450,6 +3452,35 @@ export class Session {
           agentId: msg.agentId,
           ok: false,
           error: error instanceof Error ? error.message : "Failed to rewind agent",
+        },
+      });
+    }
+  }
+
+  private async handleAgentForkRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.fork.request" }>,
+  ): Promise<void> {
+    try {
+      const result = await this.agentManager.forkConversation(msg.agentId, msg.messageId);
+      this.emit({
+        type: "agent.fork.response",
+        payload: {
+          requestId: msg.requestId,
+          sourceAgentId: result.sourceAgentId,
+          forkedAgentId: result.forkedAgentId,
+          ok: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.fork.response",
+        payload: {
+          requestId: msg.requestId,
+          sourceAgentId: msg.agentId,
+          forkedAgentId: null,
+          ok: false,
+          error: error instanceof Error ? error.message : "Failed to fork agent",
         },
       });
     }

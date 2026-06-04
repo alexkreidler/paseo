@@ -40,6 +40,47 @@ async function rollbackCodexThread(
   return parseCodexThreadRollbackResponse(await client.request("thread/rollback", params));
 }
 
+export async function forkCodexConversation(input: {
+  client: CodexRewindClient;
+  threadId: string | null;
+  messageId: string;
+  cwd?: string | null;
+  model?: string | null;
+  serviceTier?: string | null;
+  userMessageTurns: CodexUserMessageTurnIndex;
+}): Promise<string> {
+  if (!input.threadId) {
+    throw new Error("Codex thread is not ready for fork");
+  }
+
+  const targetTurnIndex = input.userMessageTurns.resolve(input.messageId);
+  if (targetTurnIndex === null) {
+    throw new Error(`Codex could not find user message ${input.messageId} in the current thread`);
+  }
+
+  const currentUserTurnCount = input.userMessageTurns.count();
+  const numTurns = currentUserTurnCount - targetTurnIndex;
+  if (numTurns < 0) {
+    throw new Error(`Codex user message ${input.messageId} is outside the current thread`);
+  }
+
+  const forked = await forkCodexThread(input.client, {
+    threadId: input.threadId,
+    cwd: input.cwd ?? null,
+    model: input.model ?? null,
+    serviceTier: input.serviceTier ?? null,
+    excludeTurns: false,
+    persistExtendedHistory: true,
+  });
+  const forkedThreadId = forked.thread.id;
+
+  const rolledBack = await rollbackCodexThread(input.client, {
+    threadId: forkedThreadId,
+    numTurns,
+  });
+  return rolledBack.thread.id;
+}
+
 export async function revertCodexConversation(input: {
   client: CodexRewindClient;
   threadId: string | null;

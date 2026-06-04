@@ -43,7 +43,12 @@ import {
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { claudeQuery, type ClaudeOptions, type ClaudeQueryFactory } from "./query.js";
-import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
+import {
+  forkClaudeConversation,
+  realClaudeRewindSdk,
+  revertClaudeConversation,
+  revertClaudeFiles,
+} from "./rewind.js";
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
 
 import {
@@ -53,6 +58,7 @@ import {
   type AgentClient,
   type AgentCreateSessionOptions,
   type AgentFeature,
+  type ForkResult,
   type AgentLaunchContext,
   type AgentMetadata,
   type AgentMode,
@@ -216,6 +222,7 @@ const CLAUDE_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindConversation: true,
   supportsRewindFiles: true,
   supportsRewindBoth: true,
+  supportsForkConversation: true,
 };
 
 const DEFAULT_MODES: AgentMode[] = [
@@ -2115,6 +2122,26 @@ class ClaudeAgentSession implements AgentSession {
   async revertBoth(input: { messageId: string }): Promise<void> {
     await this.revertFiles(input);
     await this.revertConversation(input);
+  }
+
+  async forkConversation(input: { messageId: string }): Promise<ForkResult> {
+    if (!this.claudeSessionId) {
+      throw new Error("Claude session is not ready for fork");
+    }
+    const forkedSessionId = await forkClaudeConversation({
+      sdk: realClaudeRewindSdk,
+      sessionId: this.claudeSessionId,
+      messageId: input.messageId,
+      resolveMessageId: (messageId) => this.resolveClaudeMessageId(messageId),
+    });
+    return {
+      sessionHandle: {
+        provider: "claude",
+        sessionId: forkedSessionId,
+        nativeHandle: forkedSessionId,
+        metadata: { ...this.config },
+      },
+    };
   }
 
   private resolveSlashCommandInvocation(prompt: AgentPromptInput): SlashCommandInvocation | null {

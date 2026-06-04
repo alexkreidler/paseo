@@ -5,7 +5,12 @@ import {
   AGENT_LIFECYCLE_STATUSES,
   type AgentLifecycleStatus,
 } from "@getpaseo/protocol/agent-lifecycle";
-import { isDelegatedAgent, PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
+import {
+  isDelegatedAgent,
+  FORK_SOURCE_AGENT_ID_LABEL,
+  FORK_SOURCE_MESSAGE_ID_LABEL,
+  PARENT_AGENT_ID_LABEL,
+} from "@getpaseo/protocol/agent-labels";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -56,6 +61,7 @@ import { ForegroundRunState, type ForegroundTurnWaiter } from "./foreground-run-
 import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 import { IMPORTABLE_PROVIDERS } from "./provider-registry.js";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
+import { invokeForkCapability } from "./fork/fork.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
@@ -2015,6 +2021,93 @@ export class AgentManager {
     } finally {
       this.foregroundRuns.settlePendingRun(agentId, lock.token);
     }
+  }
+
+  async forkConversation(
+    sourceAgentId: string,
+    messageId: string,
+  ): Promise<{ sourceAgentId: string; forkedAgentId: string }> {
+    const source = this.requireSessionAgent(sourceAgentId);
+    const hadActiveRun =
+      Boolean(source.activeForegroundTurnId) || this.foregroundRuns.hasPendingRun(sourceAgentId);
+    if (hadActiveRun) {
+      await this.cancelAgentRun(sourceAgentId);
+    }
+
+    const lock = this.foregroundRuns.createPendingRun(sourceAgentId);
+    try {
+      this.logger.info(
+        { agentId: sourceAgentId, provider: source.provider, messageId },
+        "agent.fork.start",
+      );
+
+      const forkResult = await invokeForkCapability(source.session, { messageId });
+
+      const sourceRows = this.timelineStore.has(sourceAgentId)
+        ? this.timelineStore.getRows(sourceAgentId)
+        : [];
+
+      const forkRows = this.filterRowsUpToMessage(sourceRows, messageId);
+
+      const labels: Record<string, string> = {
+        [FORK_SOURCE_AGENT_ID_LABEL]: sourceAgentId,
+        [FORK_SOURCE_MESSAGE_ID_LABEL]: messageId,
+      };
+
+      const configOverrides: Partial<AgentSessionConfig> = {
+        cwd: source.cwd,
+        title: source.config.title,
+      };
+
+      const forkedAgent = await this.resumeAgentFromPersistence(
+        forkResult.sessionHandle,
+        configOverrides,
+        undefined,
+        { labels },
+      );
+
+      if (forkRows.length > 0) {
+        this.timelineStore.initialize(forkedAgent.id, { rows: forkRows });
+      }
+
+      await this.hydrateTimelineFromProvider(forkedAgent.id, { force: true, broadcast: true });
+      await this.persistSnapshot(this.requireAgent(forkedAgent.id));
+
+      this.logger.info(
+        {
+          sourceAgentId,
+          forkedAgentId: forkedAgent.id,
+          provider: source.provider,
+          messageId,
+        },
+        "agent.fork.complete",
+      );
+
+      return { sourceAgentId, forkedAgentId: forkedAgent.id };
+    } catch (error) {
+      this.logger.warn(
+        { err: error, agentId: sourceAgentId, provider: source.provider, messageId },
+        "agent.fork.failed",
+      );
+      throw error;
+    } finally {
+      this.foregroundRuns.settlePendingRun(sourceAgentId, lock.token);
+    }
+  }
+
+  private filterRowsUpToMessage(rows: AgentTimelineRow[], messageId: string): AgentTimelineRow[] {
+    const result: AgentTimelineRow[] = [];
+    for (const row of rows) {
+      result.push(row);
+      const item = row.item;
+      if (
+        (item.type === "user_message" || item.type === "assistant_message") &&
+        item.messageId === messageId
+      ) {
+        break;
+      }
+    }
+    return result;
   }
 
   async deleteCommittedTimeline(agentId: string): Promise<void> {
