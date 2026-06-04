@@ -40,6 +40,22 @@ export async function revertClaudeFiles(input: {
   }
 }
 
+export async function forkClaudeConversation(input: {
+  sdk: ClaudeRewindSdk;
+  sessionId: string | null;
+  messageId: string;
+  resolveMessageId?: (messageId: string) => string | Promise<string>;
+}): Promise<string> {
+  if (!input.sessionId) {
+    throw new Error("Claude session is not ready for fork");
+  }
+  const messageId = (await input.resolveMessageId?.(input.messageId)) ?? input.messageId;
+  const fork = await input.sdk.forkSession(input.sessionId, {
+    upToMessageId: messageId,
+  });
+  return fork.sessionId;
+}
+
 export async function revertClaudeConversationAndFiles(input: {
   sdk: ClaudeRewindSdk;
   query: Query;

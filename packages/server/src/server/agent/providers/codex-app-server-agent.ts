@@ -5,6 +5,7 @@ import {
   type AgentClient,
   type AgentCreateSessionOptions,
   type AgentFeature,
+  type ForkResult,
   type AgentLaunchContext,
   type AgentMode,
   type AgentModelDefinition,
@@ -70,7 +71,11 @@ import {
   type CodexThreadRollbackResponse,
   type CodexAppServerTraceContext,
 } from "./codex/app-server-transport.js";
-import { type CodexUserMessageTurnIndex, revertCodexConversation } from "./codex/rewind.js";
+import {
+  type CodexUserMessageTurnIndex,
+  forkCodexConversation,
+  revertCodexConversation,
+} from "./codex/rewind.js";
 import {
   renderProviderImageOutputAsAssistantMarkdown,
   type ProviderImageOutput,
@@ -171,6 +176,7 @@ const CODEX_APP_SERVER_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindConversation: true,
   supportsRewindFiles: false,
   supportsRewindBoth: false,
+  supportsForkConversation: true,
 };
 
 const CODEX_MODES: AgentMode[] = [
@@ -3898,6 +3904,47 @@ export class CodexAppServerAgentSession implements AgentSession {
         await this.loadPersistedHistory();
       },
     });
+  }
+
+  async forkConversation(input: { messageId: string }): Promise<ForkResult> {
+    await this.connect();
+    if (!this.client) {
+      throw new Error("Codex client is not initialized");
+    }
+    if (this.currentThreadId) {
+      await this.ensureThreadLoaded();
+    } else {
+      await this.ensureThread();
+    }
+
+    const forkedThreadId = await forkCodexConversation({
+      client: this.client,
+      threadId: this.currentThreadId,
+      messageId: input.messageId,
+      cwd: this.config.cwd ?? null,
+      model: this.config.model ?? null,
+      serviceTier: this.serviceTier,
+      userMessageTurns: this.codexUserMessageTurns(),
+    });
+
+    return {
+      sessionHandle: {
+        provider: CODEX_PROVIDER,
+        sessionId: forkedThreadId,
+        nativeHandle: forkedThreadId,
+        metadata: {
+          provider: CODEX_PROVIDER,
+          cwd: this.config.cwd,
+          title: this.config.title ?? null,
+          threadId: forkedThreadId,
+          modeId: this.currentMode,
+          model: this.config.model ?? null,
+          extra: this.config.extra,
+          systemPrompt: this.config.systemPrompt,
+          mcpServers: this.config.mcpServers,
+        },
+      },
+    };
   }
 
   async interrupt(): Promise<void> {

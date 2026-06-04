@@ -125,6 +125,7 @@ export interface AgentCapabilityFlags {
   supportsRewindConversation?: boolean;
   supportsRewindFiles?: boolean;
   supportsRewindBoth?: boolean;
+  supportsForkConversation?: boolean;
 }
 
 export interface AgentPersistenceHandle {

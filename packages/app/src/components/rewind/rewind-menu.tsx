@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { Text, View } from "react-native";
-import { FileText, Layers, MessageSquare, Undo2 } from "lucide-react-native";
+import { FileText, GitFork, Layers, MessageSquare, Undo2 } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import {
   DropdownMenu,
@@ -19,7 +19,9 @@ interface RewindMenuProps {
   capabilities: AgentCapabilityFlags;
   rewoundText: string;
   onRewind: (input: { mode: RewindMode; rewoundText: string }) => Promise<void> | void;
+  onFork?: () => Promise<void> | void;
   isPending?: boolean;
+  isForkPending?: boolean;
   testID?: string;
 }
 
@@ -38,14 +40,18 @@ export const RewindMenu = memo(function RewindMenu({
   capabilities,
   rewoundText,
   onRewind,
+  onFork,
   isPending: isPendingProp = false,
+  isForkPending = false,
   testID = "rewind-menu",
 }: RewindMenuProps) {
   const { theme } = useUnistyles();
   const items = useRewindCapabilities(capabilities);
+  const supportsFork = Boolean(capabilities.supportsForkConversation && onFork);
   const [isOpen, setIsOpen] = useState(false);
   const [pendingMode, setPendingMode] = useState<RewindMode | null>(null);
-  const isLocked = isPendingProp || pendingMode !== null;
+  const [isForkInFlight, setIsForkInFlight] = useState(false);
+  const isLocked = isPendingProp || isForkPending || pendingMode !== null || isForkInFlight;
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -71,9 +77,27 @@ export const RewindMenu = memo(function RewindMenu({
     [isLocked, onRewind, rewoundText],
   );
 
+  const handleFork = useCallback(async () => {
+    if (isLocked || !onFork) return;
+    setIsForkInFlight(true);
+    try {
+      await onFork();
+    } catch {
+      // useForkAgentMutation owns the toast; the menu only owns flow state.
+    } finally {
+      setIsForkInFlight(false);
+      setIsOpen(false);
+    }
+  }, [isLocked, onFork]);
+
   const triggerStyle = useCallback(
     () => [styles.trigger, isLocked ? styles.triggerDisabled : null],
     [isLocked],
+  );
+
+  const forkIcon = useMemo(
+    () => <GitFork size={16} color={theme.colors.foreground} />,
+    [theme.colors.foreground],
   );
 
   const tooltipContent = useMemo(
@@ -85,7 +109,7 @@ export const RewindMenu = memo(function RewindMenu({
     [],
   );
 
-  if (items.length === 0) {
+  if (items.length === 0 && !supportsFork) {
     return null;
   }
 
@@ -113,23 +137,42 @@ export const RewindMenu = memo(function RewindMenu({
         {tooltipContent}
       </Tooltip>
       <DropdownMenuContent align="end" minWidth={220} side="bottom" testID={`${testID}-content`}>
-        <View style={styles.warningHeader}>
-          <Text style={styles.warningText}>This action cannot be undone</Text>
-        </View>
-        <DropdownMenuSeparator />
-        {items.map((item) => (
-          <DropdownMenuItem
-            key={item.mode}
-            closeOnSelect={false}
-            disabled={isLocked && pendingMode !== item.mode}
-            leading={getIcon(item.mode, theme.colors.foreground)}
-            onSelect={handleSelect(item.mode)}
-            status={pendingMode === item.mode ? "pending" : undefined}
-            testID={item.testID}
-          >
-            {item.label}
-          </DropdownMenuItem>
-        ))}
+        {supportsFork ? (
+          <>
+            <DropdownMenuItem
+              closeOnSelect={false}
+              disabled={isLocked && !isForkInFlight}
+              leading={forkIcon}
+              onSelect={handleFork}
+              status={isForkInFlight ? "pending" : undefined}
+              testID="rewind-menu-fork"
+            >
+              Branch from here
+            </DropdownMenuItem>
+            {items.length > 0 ? <DropdownMenuSeparator /> : null}
+          </>
+        ) : null}
+        {items.length > 0 ? (
+          <>
+            <View style={styles.warningHeader}>
+              <Text style={styles.warningText}>This action cannot be undone</Text>
+            </View>
+            <DropdownMenuSeparator />
+            {items.map((item) => (
+              <DropdownMenuItem
+                key={item.mode}
+                closeOnSelect={false}
+                disabled={isLocked && pendingMode !== item.mode}
+                leading={getIcon(item.mode, theme.colors.foreground)}
+                onSelect={handleSelect(item.mode)}
+                status={pendingMode === item.mode ? "pending" : undefined}
+                testID={item.testID}
+              >
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

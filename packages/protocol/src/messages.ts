@@ -250,6 +250,8 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z.object({
   supportsRewindFiles: z.boolean().optional().default(false),
   // COMPAT(rewind): added in v0.1.X, drop when floor >= v0.1.X.
   supportsRewindBoth: z.boolean().optional().default(false),
+  // COMPAT(fork): added in v0.1.90, drop when floor >= v0.1.90.
+  supportsForkConversation: z.boolean().optional().default(false),
 });
 
 const AgentUsageSchema: z.ZodType<AgentUsage> = z.object({
@@ -1282,6 +1284,24 @@ export const AgentRewindResponseMessageSchema = z.object({
   }),
 });
 
+export const AgentForkRequestMessageSchema = z.object({
+  type: z.literal("agent.fork.request"),
+  agentId: z.string(),
+  messageId: z.string(),
+  requestId: z.string(),
+});
+
+export const AgentForkResponseMessageSchema = z.object({
+  type: z.literal("agent.fork.response"),
+  payload: z.object({
+    requestId: z.string(),
+    sourceAgentId: z.string(),
+    forkedAgentId: z.string().nullable(),
+    ok: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const UpdateAgentResponseMessageSchema = z.object({
   type: z.literal("update_agent_response"),
   payload: AgentActionResponsePayloadSchema,
@@ -1872,6 +1892,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentThinkingRequestMessageSchema,
   SetAgentFeatureRequestMessageSchema,
   AgentRewindRequestMessageSchema,
+  AgentForkRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
   CheckoutStatusRequestSchema,
   SubscribeCheckoutDiffRequestSchema,
@@ -3715,6 +3736,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetAgentThinkingResponseMessageSchema,
   SetAgentFeatureResponseMessageSchema,
   AgentRewindResponseMessageSchema,
+  AgentForkResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
   WaitForFinishResponseMessageSchema,
@@ -3854,6 +3876,8 @@ export type SetAgentModelResponseMessage = z.infer<typeof SetAgentModelResponseM
 export type SetAgentThinkingResponseMessage = z.infer<typeof SetAgentThinkingResponseMessageSchema>;
 export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureResponseMessageSchema>;
 export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
+export type AgentForkRequestMessage = z.infer<typeof AgentForkRequestMessageSchema>;
+export type AgentForkResponseMessage = z.infer<typeof AgentForkResponseMessageSchema>;
 export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
 export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;

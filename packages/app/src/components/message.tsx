@@ -108,6 +108,7 @@ import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
 import { RewindMenu, type RewindMode } from "@/components/rewind/rewind-menu";
 import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mutation";
+import { useForkAgentMutation } from "@/components/rewind/use-fork-agent-mutation";
 export type { InlinePathTarget } from "@/assistant-file-links";
 
 type MarkdownStyles = Record<string, TextStyle & ViewStyle & { [key: string]: unknown }>;
@@ -489,6 +490,7 @@ export const UserMessage = memo(function UserMessage({
     [timestamp],
   );
   const rewindMutation = useRewindAgentMutation({ serverId, agentId, client, messageId });
+  const forkMutation = useForkAgentMutation({ serverId, agentId, client, messageId });
 
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
@@ -499,6 +501,9 @@ export const UserMessage = memo(function UserMessage({
     },
     [rewindMutation],
   );
+  const handleFork = useCallback(() => {
+    return forkMutation.forkAgent();
+  }, [forkMutation]);
 
   const containerStyle = useMemo(
     () => [
@@ -579,8 +584,10 @@ export const UserMessage = memo(function UserMessage({
               <RewindMenu
                 capabilities={capabilities}
                 isPending={rewindMutation.isPending}
+                isForkPending={forkMutation.isPending}
                 rewoundText={message}
                 onRewind={handleRewind}
+                onFork={handleFork}
               />
             ) : null}
             <TurnCopyButton

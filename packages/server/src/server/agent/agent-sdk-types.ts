@@ -154,6 +154,7 @@ export interface AgentCapabilityFlags {
   supportsRewindConversation?: boolean;
   supportsRewindFiles?: boolean;
   supportsRewindBoth?: boolean;
+  supportsForkConversation?: boolean;
 }
 
 export interface AgentPersistenceHandle {
@@ -162,6 +163,10 @@ export interface AgentPersistenceHandle {
   /** Provider specific handle (Codex thread id, Claude resume token, etc). */
   nativeHandle?: string;
   metadata?: AgentMetadata;
+}
+
+export interface ForkResult {
+  sessionHandle: AgentPersistenceHandle;
 }
 
 export type AgentPromptContentBlock =
@@ -580,6 +585,7 @@ export interface AgentSession {
   revertConversation?(input: { messageId: string }): Promise<void>;
   revertFiles?(input: { messageId: string }): Promise<void>;
   revertBoth?(input: { messageId: string }): Promise<void>;
+  forkConversation?(input: { messageId: string }): Promise<ForkResult>;
   /**
    * Out-of-band prompt handler. When non-null, the manager runs the returned
    * handler instead of allocating a turn. The handler emits stream events
