@@ -1,7 +1,15 @@
 import { describe, expect, test, vi } from "vitest";
 
-import type { SpawnedACPProcess, SessionStateResponse } from "./acp-agent.js";
-import { CURSOR_FAST_FEATURE_OPTION, CursorACPAgentClient } from "./cursor-acp-agent.js";
+import type { PermissionOption, RequestPermissionRequest } from "@agentclientprotocol/sdk";
+
+import { ACPAgentSession, type SpawnedACPProcess, type SessionStateResponse } from "./acp-agent.js";
+import {
+  CURSOR_FAST_FEATURE_OPTION,
+  CURSOR_FULL_ACCESS_MODE,
+  CURSOR_FULL_ACCESS_MODE_ID,
+  CursorACPAgentClient,
+  writeCursorProviderMode,
+} from "./cursor-acp-agent.js";
 import { createTestLogger } from "../../../test-utils/test-logger.js";
 
 describe("CursorACPAgentClient model discovery", () => {
@@ -39,6 +47,59 @@ describe("CursorACPAgentClient model discovery", () => {
     }
 
     protected override async closeProbe(): Promise<void> {}
+  }
+
+  function cursorSessionResponse(): SessionStateResponse {
+    return {
+      sessionId: "session-1",
+      modes: {
+        currentModeId: "agent",
+        availableModes: [{ id: "agent", name: "Agent", description: null }],
+      },
+      models: null,
+      configOptions: [],
+    };
+  }
+
+  async function createCursorSession(modeId?: string): Promise<ACPAgentSession> {
+    const session = new ACPAgentSession(
+      {
+        provider: "acp",
+        cwd: "/tmp/cursor",
+        modeId,
+      },
+      {
+        provider: "acp",
+        logger: createTestLogger(),
+        defaultCommand: ["cursor-agent", "acp"],
+        defaultModes: [],
+        providerModeWriter: writeCursorProviderMode,
+        autoApprovePermissionModeId: CURSOR_FULL_ACCESS_MODE_ID,
+        capabilities: {
+          supportsStreaming: true,
+          supportsSessionPersistence: true,
+          supportsDynamicModes: true,
+          supportsMcpServers: true,
+          supportsReasoningStream: true,
+          supportsToolInvocations: true,
+        },
+      },
+    );
+    Object.assign(session, { sessionId: "session-1" });
+    return session;
+  }
+
+  function permissionRequest(options: PermissionOption[]): RequestPermissionRequest {
+    return {
+      sessionId: "session-1",
+      toolCall: {
+        toolCallId: "web_search_0",
+        title: "Web search: latest Node.js LTS",
+        kind: "search",
+        status: "pending",
+      },
+      options,
+    };
   }
 
   test("returns only ACP model ids because Cursor CLI ids cannot select ACP models", async () => {
@@ -163,5 +224,97 @@ describe("CursorACPAgentClient model discovery", () => {
         ],
       },
     ]);
+  });
+
+  test("advertises an explicit dangerous Full Access mode", async () => {
+    const client = new TestCursorACPAgentClient(cursorSessionResponse());
+
+    await expect(
+      client.fetchCatalog({ scope: "workspace", cwd: "/tmp/cursor", force: false }),
+    ).resolves.toMatchObject({
+      modes: [
+        { id: "agent", label: "Agent" },
+        {
+          id: CURSOR_FULL_ACCESS_MODE_ID,
+          label: "Full Access",
+          icon: "ShieldOff",
+          colorTier: "dangerous",
+          isUnattended: true,
+        },
+      ],
+    });
+  });
+
+  test("passes permission requests through by default", async () => {
+    const session = await createCursorSession();
+    const permission = session.requestPermission(
+      permissionRequest([
+        { optionId: "reject-once", name: "Reject", kind: "reject_once" },
+        { optionId: "allow-once", name: "Allow", kind: "allow_once" },
+      ]),
+    );
+
+    await Promise.resolve();
+
+    const [pending] = session.getPendingPermissions();
+    expect(pending).toEqual(expect.objectContaining({ name: "search", kind: "tool" }));
+
+    await session.respondToPermission(pending!.id, { behavior: "allow" });
+    await expect(permission).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "allow-once" },
+    });
+  });
+
+  test("auto-selects a semantic allow option in Cursor Full Access mode", async () => {
+    const session = await createCursorSession(CURSOR_FULL_ACCESS_MODE_ID);
+
+    await expect(
+      session.requestPermission(
+        permissionRequest([
+          { optionId: "reject-once", name: "Reject", kind: "reject_once" },
+          { optionId: "allow-always", name: "Always Allow", kind: "allow_always" },
+        ]),
+      ),
+    ).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "allow-always" },
+    });
+    expect(session.getPendingPermissions()).toEqual([]);
+  });
+
+  test("keeps Cursor modes available after selecting Full Access", async () => {
+    const session = await createCursorSession();
+    Object.assign(session, {
+      connection: {},
+      currentMode: "agent",
+      availableModes: [{ id: "agent", label: "Agent" }, CURSOR_FULL_ACCESS_MODE],
+    });
+
+    await session.setMode(CURSOR_FULL_ACCESS_MODE_ID);
+
+    await expect(session.getCurrentMode()).resolves.toBe(CURSOR_FULL_ACCESS_MODE_ID);
+    await expect(session.getAvailableModes()).resolves.toEqual([
+      { id: "agent", label: "Agent" },
+      CURSOR_FULL_ACCESS_MODE,
+    ]);
+  });
+
+  test("keeps prompting in Full Access mode when ACP offers no allow option", async () => {
+    const session = await createCursorSession(CURSOR_FULL_ACCESS_MODE_ID);
+    const permission = session.requestPermission(
+      permissionRequest([
+        { optionId: "reject-once", name: "Reject", kind: "reject_once" },
+        { optionId: "cancel", name: "Cancel", kind: "reject_always" },
+      ]),
+    );
+
+    await Promise.resolve();
+
+    const [pending] = session.getPendingPermissions();
+    expect(pending).toEqual(expect.objectContaining({ name: "search", kind: "tool" }));
+
+    await session.respondToPermission(pending!.id, { behavior: "deny" });
+    await expect(permission).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "reject-once" },
+    });
   });
 });

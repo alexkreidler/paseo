@@ -9,6 +9,9 @@ import {
   type ACPConfigFeatureOption,
   DEFAULT_ACP_CAPABILITIES,
   type ACPExtensionCommandsParser,
+  type ACPProviderModeWriterContext,
+  type ACPProviderModeWriteResult,
+  type SessionStateResponse,
 } from "./acp-agent.js";
 import {
   buildBinaryDiagnosticRows,
@@ -48,6 +51,11 @@ interface GenericACPAgentClientOptions {
   diagnosticPhaseTimeoutMs?: number;
   clientCapabilityMeta?: ACPClientCapabilityMeta;
   configFeatureOptions?: ACPConfigFeatureOption[];
+  sessionResponseTransformer?: (response: SessionStateResponse) => SessionStateResponse;
+  providerModeWriter?: (
+    context: ACPProviderModeWriterContext,
+  ) => Promise<ACPProviderModeWriteResult>;
+  autoApprovePermissionModeId?: string;
   extensionCommandsParser?: ACPExtensionCommandsParser;
 }
 
@@ -72,6 +80,9 @@ export class GenericACPAgentClient extends ACPAgentClient {
       clientCapabilities: providerParams.clientCapabilities,
       clientCapabilityMeta: options.clientCapabilityMeta,
       configFeatureOptions: options.configFeatureOptions,
+      sessionResponseTransformer: options.sessionResponseTransformer,
+      providerModeWriter: options.providerModeWriter,
+      autoApprovePermissionModeId: options.autoApprovePermissionModeId,
       extensionCommandsParser: options.extensionCommandsParser,
     });
 

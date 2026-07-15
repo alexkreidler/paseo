@@ -33,7 +33,7 @@ export function addRunOptions(cmd: Command): Command {
       "Model to use (e.g., claude-sonnet-4-20250514, claude-3-5-haiku-20241022)",
     )
     .option("--thinking <id>", "Thinking option ID to use for this run")
-    .option("--mode <mode>", "Provider-specific mode (e.g., plan, default, bypass)")
+    .option("--mode <mode>", "Provider-specific mode (e.g., plan, default, full-access)")
     .option("--worktree <name>", "Create agent in a new git worktree")
     .option("--base <branch>", "Base branch for worktree (default: current branch)")
     .option(

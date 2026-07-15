@@ -411,6 +411,18 @@ ACP agents communicate over JSON-RPC 2.0 on stdio. Paseo spawns the agent proces
 
 Paseo also ships an in-app ACP provider catalog for common agents, including CodeWhale, Cursor, DeepAgents, DimCode, Gemini CLI, Hermes, Qwen Code, and Kimi Code. Catalog entries create the same `extends: "acp"` provider config shown below.
 
+### Cursor Full Access mode
+
+Cursor providers installed from Paseo's ACP catalog expose a **Full Access** mode. This is an explicit, per-session trust decision: while selected, Paseo automatically accepts every ACP permission request that includes a semantic allow option. This works around Cursor ACP permission requests that still prompt under Cursor's own `approvalMode: "unrestricted"`, including built-in web search.
+
+Full Access is dangerous because it permits unattended commands, file changes, network access, and any other tools Cursor requests. The default remains Cursor's normal permission flow. If Cursor sends a request without an ACP option marked `allow_once` or `allow_always`, Paseo does not guess from option order and shows the permission prompt normally.
+
+Select **Full Access** in the app's mode picker, or opt in for one CLI-created session:
+
+```bash
+paseo run --provider cursor --mode full-access "Search the web and implement the result"
+```
+
 ### Adding a generic ACP provider
 
 Set `extends: "acp"` and provide a `command`:

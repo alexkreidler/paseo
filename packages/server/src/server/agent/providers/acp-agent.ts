@@ -389,6 +389,7 @@ interface ACPAgentClientOptions {
     sessionId: string,
     thinkingOptionId: string,
   ) => Promise<void>;
+  autoApprovePermissionModeId?: string;
   capabilities?: AgentCapabilityFlags;
   extensionCommandsParser?: ACPExtensionCommandsParser;
   waitForInitialCommands?: boolean;
@@ -419,6 +420,7 @@ interface ACPAgentSessionOptions {
     sessionId: string,
     thinkingOptionId: string,
   ) => Promise<void>;
+  autoApprovePermissionModeId?: string;
   capabilities: AgentCapabilityFlags;
   extensionCommandsParser?: ACPExtensionCommandsParser;
   handle?: AgentPersistenceHandle;
@@ -613,11 +615,18 @@ export function deriveModesFromACP(
 ): { modes: AgentMode[]; currentModeId: string | null } {
   if (modeState?.availableModes?.length) {
     return {
-      modes: modeState.availableModes.map((mode) => ({
-        id: mode.id,
-        label: mode.name,
-        description: mode.description ?? undefined,
-      })),
+      modes: modeState.availableModes.map((mode) => {
+        const metadata = mode as SessionMode &
+          Pick<AgentMode, "icon" | "colorTier" | "isUnattended">;
+        return {
+          id: mode.id,
+          label: mode.name,
+          description: mode.description ?? undefined,
+          ...(metadata.icon ? { icon: metadata.icon } : {}),
+          ...(metadata.colorTier ? { colorTier: metadata.colorTier } : {}),
+          ...(metadata.isUnattended !== undefined ? { isUnattended: metadata.isUnattended } : {}),
+        };
+      }),
       currentModeId: modeState.currentModeId ?? null,
     };
   }
@@ -730,6 +739,7 @@ export class ACPAgentClient implements AgentClient {
     sessionId: string,
     thinkingOptionId: string,
   ) => Promise<void>;
+  private readonly autoApprovePermissionModeId?: string;
   private readonly waitForInitialCommands: boolean;
   private readonly initialCommandsWaitTimeoutMs: number;
   private readonly extensionCommandsParser?: ACPExtensionCommandsParser;
@@ -757,6 +767,7 @@ export class ACPAgentClient implements AgentClient {
     this.providerModeWriter = options.providerModeWriter;
     this.beforeModeWriter = options.beforeModeWriter;
     this.thinkingOptionWriter = options.thinkingOptionWriter;
+    this.autoApprovePermissionModeId = options.autoApprovePermissionModeId;
     this.waitForInitialCommands = options.waitForInitialCommands ?? false;
     this.initialCommandsWaitTimeoutMs = options.initialCommandsWaitTimeoutMs ?? 1500;
     this.extensionCommandsParser = options.extensionCommandsParser;
@@ -786,6 +797,7 @@ export class ACPAgentClient implements AgentClient {
         providerModeWriter: this.providerModeWriter,
         beforeModeWriter: this.beforeModeWriter,
         thinkingOptionWriter: this.thinkingOptionWriter,
+        autoApprovePermissionModeId: this.autoApprovePermissionModeId,
         capabilities: this.capabilities,
         agentId: launchContext?.agentId,
         launchEnv: launchContext?.env,
@@ -836,6 +848,7 @@ export class ACPAgentClient implements AgentClient {
       providerModeWriter: this.providerModeWriter,
       beforeModeWriter: this.beforeModeWriter,
       thinkingOptionWriter: this.thinkingOptionWriter,
+      autoApprovePermissionModeId: this.autoApprovePermissionModeId,
       capabilities: this.capabilities,
       handle,
       agentId: launchContext?.agentId,
@@ -1298,6 +1311,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     sessionId: string,
     thinkingOptionId: string,
   ) => Promise<void>;
+  private readonly autoApprovePermissionModeId?: string;
   private readonly agentId?: string;
   private readonly launchEnv?: Record<string, string>;
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
@@ -1316,6 +1330,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private agentCapabilities: ACPAgentCapabilities | null = null;
   private sessionId: string | null = null;
   private currentMode: string | null = null;
+  private autoApprovePermissions = false;
   private availableModes: AgentMode[];
   private currentModel: string | null = null;
   private availableModels: AvailableACPModel[] | null = null;
@@ -1357,12 +1372,16 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.providerModeWriter = options.providerModeWriter;
     this.beforeModeWriter = options.beforeModeWriter;
     this.thinkingOptionWriter = options.thinkingOptionWriter;
+    this.autoApprovePermissionModeId = options.autoApprovePermissionModeId;
     this.availableModes = options.defaultModes;
     this.agentId = options.agentId;
     this.launchEnv = options.launchEnv;
     this.initialHandle = options.handle;
     this.config = { ...config, provider: options.provider };
     this.currentMode = config.modeId ?? null;
+    this.autoApprovePermissions =
+      this.autoApprovePermissionModeId !== undefined &&
+      config.modeId === this.autoApprovePermissionModeId;
     this.currentModel = config.model ?? null;
     this.thinkingOptionId = config.thinkingOptionId ?? null;
     this.currentTitle = config.title ?? null;
@@ -1636,10 +1655,11 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       : { handled: false };
     if (providerResult.handled) {
       this.currentMode = providerResult.currentModeId ?? modeId;
+      this.updateAutoApprovePermissions(modeId);
       if (providerResult.configOptions) {
         this.configOptions = this.transformConfigOptions(providerResult.configOptions);
+        this.availableModes = deriveModesFromACP(this.defaultModes, null, this.configOptions).modes;
       }
-      this.availableModes = deriveModesFromACP(this.defaultModes, null, this.configOptions).modes;
       this.pushEvent({
         type: "mode_changed",
         provider: this.provider,
@@ -1687,6 +1707,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     if (selection.hasAvailableModes) {
       await this.connection.setSessionMode({ sessionId: this.sessionId, modeId });
       this.currentMode = modeId;
+      this.updateAutoApprovePermissions(modeId);
       this.pushEvent({
         type: "mode_changed",
         provider: this.provider,
@@ -1713,6 +1734,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       requestedValue: modeId,
       label: "mode",
     });
+    this.updateAutoApprovePermissions(modeId);
     this.availableModes = deriveModesFromACP(this.defaultModes, null, this.configOptions).modes;
     this.pushEvent({
       type: "mode_changed",
@@ -2066,7 +2088,23 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
-    // Match Zed acp.rs:3189-3220: generic ACP permission requests stay pure pass-through.
+    if (this.autoApprovePermissions) {
+      const allowOption = selectPermissionOption(params.options, { behavior: "allow" });
+      if (allowOption) {
+        return {
+          outcome: {
+            outcome: "selected",
+            optionId: allowOption.optionId,
+          },
+        };
+      }
+      this.logger.warn(
+        { options: params.options, toolCallId: params.toolCall.toolCallId },
+        "ACP full-access mode could not find a semantic allow option; requesting permission",
+      );
+    }
+
+    // Match Zed acp.rs:3189-3220: ACP permission requests stay pass-through by default.
     const requestId = randomUUID();
     let toolSnapshot =
       this.toolCalls.get(params.toolCall.toolCallId) ??
@@ -2369,7 +2407,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.configOptions = this.transformConfigOptions(transformed.configOptions ?? []);
 
     const modeInfo = deriveModesFromACP(this.defaultModes, transformed.modes, this.configOptions);
-    this.availableModes = modeInfo.modes;
+    if (modeInfo.modes.length > 0) {
+      this.availableModes = modeInfo.modes;
+    }
     this.currentMode = modeInfo.currentModeId ?? this.currentMode;
 
     this.availableModels = transformed.models?.availableModels ?? null;
@@ -2576,6 +2616,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }
 
   private handleCurrentModeUpdate(update: CurrentModeUpdate): void {
+    if (this.autoApprovePermissions) {
+      return;
+    }
     this.currentMode = this.transformModeId(update.currentModeId);
   }
 
@@ -2587,7 +2630,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     const nextThinkingOptionId = deriveCurrentConfigValue(this.configOptions, "thought_level");
 
     this.availableModes = modeInfo.modes;
-    this.currentMode = nextMode ?? this.currentMode;
+    if (!this.autoApprovePermissions) {
+      this.currentMode = nextMode ?? this.currentMode;
+    }
     this.currentModel = nextModel ?? this.currentModel;
     this.thinkingOptionId = nextThinkingOptionId ?? this.thinkingOptionId;
 
@@ -2615,6 +2660,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       });
     }
     return events;
+  }
+
+  private updateAutoApprovePermissions(modeId: string): void {
+    this.autoApprovePermissions = modeId === this.autoApprovePermissionModeId;
   }
 
   private handleSessionInfoUpdate(update: SessionInfoUpdate): void {

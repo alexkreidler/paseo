@@ -6,6 +6,7 @@
 
 - Inspect provider-created subagents and their live conversations from the Subagents track ([#2013](https://github.com/getpaseo/paseo/pull/2013) by [@omercnet](https://github.com/omercnet))
 - Fork chats with every supported agent provider ([#2022](https://github.com/getpaseo/paseo/pull/2022))
+- Cursor Full Access mode for explicitly auto-approving ACP tool permissions, including web search ([#1926](https://github.com/getpaseo/paseo/issues/1926))
 
 ### Improved
 

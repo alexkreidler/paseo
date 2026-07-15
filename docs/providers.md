@@ -12,6 +12,8 @@ The only built-in ACP provider today is `copilot` (`copilot-acp-agent.ts`). `Gen
 
 Copilot custom agents are exposed through ACP session config, not the slash-command list. When custom agents are available, Copilot returns a select config option with `id: "agent"` and `category: "_agent"`; Paseo maps that to the `agent` provider feature. Copilot uses the agent display name as the option value, and the blank value means the default Copilot agent.
 
+ACP client-side full-access policies must be explicit provider modes, never default behavior. Configure the mode ID on `ACPAgentClient`; permission requests may be auto-selected only when an option's ACP `kind` is `allow_once` or `allow_always`. If no semantic allow option exists, preserve the normal permission request instead of choosing by array position. Cursor uses this policy for its synthetic `full-access` mode because Cursor's closed-source ACP server may prompt even when its own approval configuration is unrestricted.
+
 ### Direct
 
 Implement the `AgentClient` and `AgentSession` interfaces from `agent-sdk-types.ts` yourself. This gives full control but requires you to handle process management, streaming, permissions, and session persistence from scratch.
