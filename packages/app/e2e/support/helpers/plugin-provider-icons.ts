@@ -123,6 +123,7 @@ export async function verifyNewWorkspaceModelIcon({
     await openGlobalNewWorkspaceComposer(page);
     await selectPluginModel(page);
     await openModelPicker(page);
+    await page.getByTestId("model-provider-direct-example").click();
     await expectProviderIcon(page.getByTestId("model-row-direct-example-example-1"), iconPaths);
     await capture(page, testInfo, "new-workspace-picker");
     await page.keyboard.press("Escape");
