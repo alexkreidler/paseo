@@ -78,14 +78,8 @@ export function resolveModelBrowserAllView({
 /** Where the picker lands when it opens. A sole provider skips the redundant root view. */
 export function resolveInitialModelBrowserView({
   providers,
-  selectedProvider,
-  selectedModel,
-  hasProfiles,
 }: {
   providers: ProviderSelectorProvider[];
-  selectedProvider: string;
-  selectedModel: string;
-  hasProfiles: boolean;
 }): ModelBrowserView {
   const singleProvider = providers.length === 1 ? providers[0] : undefined;
   if (singleProvider) {
@@ -94,17 +88,6 @@ export function resolveInitialModelBrowserView({
       providerId: singleProvider.id,
       providerLabel: singleProvider.label,
     };
-  }
-
-  if (hasProfiles) {
-    return { kind: "all" };
-  }
-
-  if (selectedProvider.length > 0 && selectedModel.length > 0) {
-    const provider = providers.find((entry) => entry.id === selectedProvider);
-    if (provider) {
-      return { kind: "provider", providerId: provider.id, providerLabel: provider.label };
-    }
   }
 
   return { kind: "all" };

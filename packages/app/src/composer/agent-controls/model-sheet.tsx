@@ -1,3 +1,4 @@
+import { useModelPickerShortcut } from "@/composer/agent-controls/model-picker-shortcut";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -211,6 +212,8 @@ export function CompactModelSheet({
     setIsOpen(true);
     onOpen?.();
   }, [onOpen, rootBrowser]);
+
+  useModelPickerShortcut({ open, disabled, isOpen });
 
   const close = useCallback(() => {
     setIsModelBrowserOpen(false);

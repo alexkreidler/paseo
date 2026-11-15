@@ -220,11 +220,11 @@ describe("hardware source adapter", () => {
     expect(claimed).toEqual([]);
 
     const releaseComposer = focusSurfaces.declare("message-input");
-    expect(claimed).toEqual(["Shift+Tab"]);
+    expect(claimed).toEqual(["Alt+KeyM", "Shift+Tab"]);
     setCommandCenterOpen(true);
     expect(claimed).toEqual([]);
     setCommandCenterOpen(false);
-    expect(claimed).toEqual(["Shift+Tab"]);
+    expect(claimed).toEqual(["Alt+KeyM", "Shift+Tab"]);
     releaseComposer();
     expect(claimed).toEqual([]);
 
@@ -247,7 +247,7 @@ describe("hardware source adapter", () => {
       enabled: true,
     });
     const releaseChord = focusSurfaces.declare("message-input");
-    expect(claimed).toEqual([]);
+    expect(claimed).toEqual(["Alt+KeyM"]);
     releaseChord();
 
     const releaseFinal = focusSurfaces.declare("message-input");
@@ -264,7 +264,7 @@ describe("hardware source adapter", () => {
       usesDesktopBindings: true,
       enabled: true,
     });
-    expect(claimed).toEqual(["Shift+Tab"]);
+    expect(claimed).toEqual(["Alt+KeyM", "Shift+Tab"]);
     detach();
     expect(claimed).toEqual([]);
     releaseFinal();

@@ -44,7 +44,6 @@ async function expectProviderIcon(surface: Locator, paths: string[]): Promise<vo
 
 async function selectPluginModel(page: Page): Promise<void> {
   await openModelPicker(page);
-  await page.getByRole("button", { name: "Back", exact: true }).click();
   await page.getByText("Direct provider example", { exact: true }).click();
   await page.getByText("Example 1", { exact: true }).click();
   await expect(page.getByRole("button", { name: MODEL_LABEL, exact: true })).toBeVisible();
@@ -124,6 +123,7 @@ export async function verifyNewWorkspaceModelIcon({
     await openGlobalNewWorkspaceComposer(page);
     await selectPluginModel(page);
     await openModelPicker(page);
+    await page.getByTestId("model-provider-direct-example").click();
     await expectProviderIcon(page.getByTestId("model-row-direct-example-example-1"), iconPaths);
     await capture(page, testInfo, "new-workspace-picker");
     await page.keyboard.press("Escape");

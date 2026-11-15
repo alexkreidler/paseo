@@ -313,18 +313,8 @@ export function useModelBrowser({
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchResetKey, bumpSearchResetKey] = useReducer((key: number) => key + 1, 0);
-  const hasProfiles = (profiles?.rows.length ?? 0) > 0;
 
-  const initialView = useMemo(
-    () =>
-      resolveInitialModelBrowserView({
-        providers,
-        selectedProvider,
-        selectedModel,
-        hasProfiles,
-      }),
-    [hasProfiles, providers, selectedModel, selectedProvider],
-  );
+  const initialView = useMemo(() => resolveInitialModelBrowserView({ providers }), [providers]);
 
   const prepareToOpen = useCallback(() => {
     setView(initialView);

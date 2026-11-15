@@ -2682,6 +2682,7 @@ export const zhCN: TranslationResources = {
         toggleFocusMode: "切换专注模式",
         cycleTheme: "循环切换主题",
         focusMessageInput: "聚焦消息输入框",
+        openModelPicker: "切换模型",
         cycleAgentMode: "循环切换代理模式",
         toggleVoiceMode: "切换语音模式",
         startStopDictation: "开始/停止听写",

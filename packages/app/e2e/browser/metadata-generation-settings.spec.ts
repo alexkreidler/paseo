@@ -91,6 +91,7 @@ test("replaces only the first configured metadata model", async ({ page }) => {
       "true",
     );
     await openManualMetadataModelPicker(page);
+    await page.getByTestId("model-provider-mock").click();
     await page.getByText("Ten second stream", { exact: true }).click();
 
     await expect

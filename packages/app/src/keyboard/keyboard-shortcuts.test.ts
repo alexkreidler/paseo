@@ -338,6 +338,13 @@ describe("keyboard-shortcuts", () => {
       payload: { kind: "dictation-toggle" },
     },
     {
+      name: "opens the model picker from the focused composer",
+      event: { key: "m", code: "KeyM", altKey: true },
+      context: { focusScope: "message-input" },
+      action: "message-input.action",
+      payload: { kind: "model-picker" },
+    },
+    {
       name: "routes Shift+Tab to cycle agent mode from the message input",
       event: { key: "Tab", code: "Tab", shiftKey: true },
       context: { focusScope: "message-input" },
@@ -590,6 +597,26 @@ describe("keyboard-shortcuts", () => {
 
   it.each(nonMatchingCases)("$name", ({ event, context }) => {
     expectNoShortcutResolution({ event, context });
+  });
+
+  it.each(["terminal", "editable", "other"] as const)("leaves Alt+M alone in %s", (focusScope) => {
+    const result = resolveShortcut({
+      event: { key: "m", code: "KeyM", altKey: true },
+      context: { focusScope },
+    });
+    expect(result.match).toBeNull();
+  });
+
+  it("rebinds model switching through shortcut settings", () => {
+    const result = resolveShortcut({
+      event: { key: "j", code: "KeyJ", altKey: true },
+      context: { focusScope: "message-input" },
+      bindings: buildEffectiveBindings({ "message-input-model-picker-alt-m": "Alt+J" }),
+    });
+    expect(result.match).toMatchObject({
+      action: "message-input.action",
+      payload: { kind: "model-picker" },
+    });
   });
 
   // A rebound pane-focus shortcut has to fire wherever the user is typing.
