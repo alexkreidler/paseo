@@ -4,6 +4,12 @@ import { test, expect, type Page } from "../support/fixtures";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import {
   closeModelPicker,
+  applyProfileFromPicker,
+  expectComposerModel,
+  expectHostAgentProfiles,
+  expectProfilePinnedAboveProviders,
+  expectModelRowSelected,
+  stageLegacyFavoritesForHostMigration,
   expectModelSearchEmptyState,
   expectModelPickerHeight,
   expectModelPickerWidth,
@@ -53,6 +59,114 @@ const LARGE_CATALOG = {
 };
 
 test.describe("Cross-provider model search", () => {
+  test("Claude and Codex favorites and search share the draft picker", async ({
+    page,
+  }, testInfo) => {
+    const client = await connectDaemonClient<DaemonClient>({
+      clientIdPrefix: "claude-codex-picker",
+    });
+    const previous = await client.getDaemonConfig();
+    const profiles = await seedAgentProfiles([]);
+    const workspace = await seedWorkspace({ repoPrefix: "claude-codex-picker-" });
+    // Exercise the built-in provider identities with deterministic discovery;
+    // selecting a draft model must not start either provider's paid session.
+    try {
+      await client.patchDaemonConfig({
+        providers: {
+          claude: {
+            enabled: true,
+            command: [process.execPath],
+            label: "Claude",
+            models: [{ id: "opus", label: "Opus" }],
+          },
+          codex: {
+            enabled: true,
+            command: [process.execPath],
+            label: "Codex",
+            models: [{ id: "gpt-5.6-sol", label: "GPT-5.6 Sol" }],
+          },
+        },
+      });
+      await stageLegacyFavoritesForHostMigration(page, [
+        { provider: "claude", modelId: "opus" },
+        { provider: "codex", modelId: "gpt-5.6-sol" },
+      ]);
+      await expectHostAgentProfiles([
+        { id: "legacy_favorite:claude:opus", name: "Opus", provider: "claude", model: "opus" },
+        {
+          id: "legacy_favorite:codex:gpt-5.6-sol",
+          name: "GPT-5.6 Sol",
+          provider: "codex",
+          model: "gpt-5.6-sol",
+        },
+      ]);
+      await gotoWorkspace(page, workspace.workspaceId);
+      await clickNewChat(page);
+      await expectComposerVisible(page);
+
+      await test.step("both favorites are pinned and can switch providers in either direction", async () => {
+        await openModelPicker(page);
+        await expectProfilePinnedAboveProviders(page, { name: "Opus", summary: "Claude · Opus" });
+        await expectProfilePinnedAboveProviders(page, {
+          name: "GPT-5.6 Sol",
+          summary: "Codex · GPT-5.6 Sol",
+        });
+        await page.screenshot({ path: testInfo.outputPath("claude-codex-favorites.png") });
+        await applyProfileFromPicker(page, "Opus");
+        await expectComposerModel(page, "Opus");
+        await openModelPicker(page);
+        await applyProfileFromPicker(page, "GPT-5.6 Sol");
+        await expectComposerModel(page, "GPT-5.6 Sol");
+        await reloadSavedDraft(page);
+        await expectComposerModel(page, "GPT-5.6 Sol");
+      });
+
+      await test.step("search reaches both providers and clearing it restores both favorites", async () => {
+        await page.getByRole("textbox", { name: "Message agent..." }).first().focus();
+        await page.keyboard.press("Alt+m");
+        await searchAllModels(page, "Claude Opus");
+        await expectModelSearchResult(page, {
+          provider: "claude",
+          modelId: "opus",
+          providerLabel: "Claude",
+          modelLabel: "Opus",
+        });
+        await page.getByTestId("model-row-claude-opus").click();
+        await expectComposerModel(page, "Opus");
+        await openModelPicker(page);
+        await searchAllModels(page, "Codex Sol");
+        await expectModelSearchResult(page, {
+          provider: "codex",
+          modelId: "gpt-5.6-sol",
+          providerLabel: "Codex",
+          modelLabel: "GPT-5.6 Sol",
+        });
+        await page.screenshot({ path: testInfo.outputPath("claude-codex-search.png") });
+        await page.getByTestId("model-row-codex-gpt-5.6-sol").click();
+        await expectComposerModel(page, "GPT-5.6 Sol");
+        await openModelPicker(page);
+        await searchAllModels(page, "Codex Sol");
+        await expectModelRowSelected(page, { provider: "codex", modelId: "gpt-5.6-sol" });
+        await searchAllModels(page, "zzz");
+        await expectModelSearchEmptyState(page, "zzz");
+        await searchAllModels(page, "");
+        await expectProfilePinnedAboveProviders(page, { name: "Opus", summary: "Claude · Opus" });
+        await expectProfilePinnedAboveProviders(page, {
+          name: "GPT-5.6 Sol",
+          summary: "Codex · GPT-5.6 Sol",
+        });
+        await applyProfileFromPicker(page, "Opus");
+        await expectComposerModel(page, "Opus");
+      });
+    } finally {
+      await workspace.cleanup();
+      await profiles.restore();
+      await client.patchDaemonConfig({ removeProviders: ["claude", "codex"] });
+      await client.patchDaemonConfig({ providers: previous.config.providers });
+      await client.close();
+    }
+  });
+
   test("switches providers directly after reopening a picker without profiles", async ({
     page,
   }, testInfo) => {
