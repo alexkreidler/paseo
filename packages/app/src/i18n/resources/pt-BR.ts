@@ -2751,6 +2751,7 @@ export const ptBR: TranslationResources = {
         toggleFocusMode: "Alternar modo de foco",
         cycleTheme: "Alternar tema",
         focusMessageInput: "Focar entrada de mensagem",
+        openModelPicker: "Trocar modelo",
         cycleAgentMode: "Alternar modo do agente",
         toggleVoiceMode: "Alternar modo de voz",
         startStopDictation: "Iniciar/parar ditado",

@@ -34,8 +34,7 @@ const STUDIO = {
   ],
 };
 
-// The cross-provider search lives on the picker's root view, and a profile is
-// what keeps the picker opening there.
+// Pinned profiles must remain available alongside cross-provider search.
 const ROOT_VIEW_PROFILE = {
   id: "agent_profile_e2e_search_root",
   name: "Search anchor",
@@ -54,6 +53,49 @@ const LARGE_CATALOG = {
 };
 
 test.describe("Cross-provider model search", () => {
+  test("switches providers directly after reopening a picker without profiles", async ({
+    page,
+  }, testInfo) => {
+    const provider = await seedModelProvider(STUDIO);
+    const profiles = await seedAgentProfiles([]);
+    const workspace = await seedWorkspace({ repoPrefix: "model-switch-direct-" });
+    try {
+      await gotoWorkspace(page, workspace.workspaceId);
+      await clickNewChat(page);
+      await expectComposerVisible(page);
+      await page.getByRole("textbox", { name: "Message agent..." }).first().focus();
+      await page.keyboard.press("Alt+m");
+      await expect(page.getByTestId("model-search-all-input")).toBeFocused();
+      await page.mouse.move(1100, 100);
+      await page.screenshot({ path: testInfo.outputPath("all-provider-models.png") });
+      await page.keyboard.type("studio deep");
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Enter");
+      await expect(
+        page.getByTestId("combined-model-selector").filter({ visible: true }).first(),
+      ).toContainText("Studio deep think");
+      await page.getByRole("textbox", { name: "Message agent..." }).first().focus();
+      await page.keyboard.press("Alt+m");
+      await expect(page.getByTestId("model-search-all-input")).toBeVisible();
+      await searchAllModels(page, "ten second stream");
+      await expectModelSearchResult(page, {
+        provider: "mock",
+        modelId: "ten-second-stream",
+        modelLabel: "Ten second stream",
+        providerLabel: MOCK_PROVIDER_LABEL,
+      });
+      await page.screenshot({ path: testInfo.outputPath("direct-model-switch.png") });
+      await page.getByTestId("model-row-mock-ten-second-stream").click();
+      await expect(
+        page.getByTestId("combined-model-selector").filter({ visible: true }).first(),
+      ).toContainText("Ten second stream");
+    } finally {
+      await workspace.cleanup();
+      await profiles.restore();
+      await provider.restore();
+    }
+  });
+
   test("one query over the picker root reaches every provider and names each result's provider", async ({
     page,
   }) => {
@@ -199,7 +241,6 @@ async function reloadSavedDraft(page: Page) {
 }
 async function expectOneCatalogChoice(page: Page, label: string) {
   await openModelPicker(page);
-  await page.getByRole("button", { name: "Back", exact: true }).click();
   await searchAllModels(page, label);
   await expect(page.getByTestId("model-row-gemini-gemini-3.5-flash")).toHaveCount(1);
   await closeModelPicker(page);

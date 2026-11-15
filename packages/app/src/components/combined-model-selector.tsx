@@ -1,3 +1,4 @@
+import { useModelPickerShortcut } from "@/composer/agent-controls/model-picker-shortcut";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -122,6 +123,8 @@ export function CombinedModelSelector({
     },
     [onClose, onOpen, prepareToOpen, reset],
   );
+
+  useModelPickerShortcut({ open: () => handleOpenChange(true), disabled, isOpen });
 
   const handleSelect = useCallback(
     (provider: string, modelId: string) => {

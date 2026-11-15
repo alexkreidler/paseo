@@ -198,6 +198,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
   "agent-input": [
     "focus-message-input",
     "cycle-agent-mode",
+    "open-model-picker",
     "voice-toggle",
     "dictation-toggle",
     "agent-interrupt",
@@ -245,6 +246,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
+  "open-model-picker": "settings.shortcuts.help.openModelPicker",
   "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
   "dictation-toggle": "settings.shortcuts.help.startStopDictation",
   "agent-interrupt": "settings.shortcuts.help.interruptAgent",
@@ -1148,6 +1150,15 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       section: "agent-input",
       label: "Focus message input",
     },
+  },
+  {
+    id: "message-input-model-picker-alt-m",
+    action: "message-input.action",
+    combo: "Alt+M",
+    repeat: false,
+    when: { commandCenter: false, focusScope: "message-input" },
+    payload: { type: "message-input", kind: "model-picker" },
+    help: { id: "open-model-picker", section: "agent-input", label: "Switch model" },
   },
   {
     id: "message-input-mode-cycle-shift-tab",

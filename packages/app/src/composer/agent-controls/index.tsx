@@ -1,3 +1,5 @@
+import { Shortcut } from "@/components/ui/shortcut";
+import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { router } from "expo-router";
@@ -751,6 +753,7 @@ interface DesktopAgentControlsContentProps extends AgentControlsContentProps {
 }
 
 function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
+  const modelShortcut = useShortcutKeys("open-model-picker");
   const sheetBridge = useComposerSheetBridge();
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -826,6 +829,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
             <Text style={styles.tooltipText}>{t(getAgentControlHintKey("model"))}</Text>
+            {modelShortcut ? <Shortcut chord={modelShortcut} /> : null}
           </TooltipContent>
         </Tooltip>
       ) : null}
